@@ -58,7 +58,9 @@
   "C_Cpp_Runner.msvcSecureNoWarnings": false,
   "files.associations": {
     "stdio.h": "c",
-    "semaphore.h": "c"
+    "semaphore.h": "c",
+    "stdlib.h": "c",
+    "unistd.h": "c"
   },
   "makefile.makefilePath": ""
 }

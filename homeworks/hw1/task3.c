@@ -49,6 +49,8 @@ void process_file(const char* filename, const char* positive_word, const char* n
     int line_number = 0;
     char buffer[PIPE_BUFFER_SIZE];
 
+    int total_sentiment = 0;
+
     while (fgets(line, MAX_LINE_LENGTH, file)) {
         line_number++;
       
@@ -57,10 +59,13 @@ void process_file(const char* filename, const char* positive_word, const char* n
         int sentiment_score = num_positive * 5 - num_negative * 3;
 
         if (sentiment_score != 0) {
-            snprintf(buffer, PIPE_BUFFER_SIZE, "%s, %d, score: %d -> %s", filename, line_number, sentiment_score, line);
+            snprintf(buffer, PIPE_BUFFER_SIZE, "%s, %d: %s", filename, line_number, line);
             write(pipe_fd, buffer, strlen(buffer));
+            total_sentiment += sentiment_score;
         }
     }
+
+    printf("Total sentiment score for %s: %d\n", filename, total_sentiment);
 
     fclose(file);
     close(pipe_fd); // Close the write end of the pipe
@@ -69,7 +74,12 @@ void process_file(const char* filename, const char* positive_word, const char* n
 int main(int argc, char *argv[]) {
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_MONOTONIC, &start_time);
-    
+
+    printf("---------------------------------------------------------------------\n");
+    printf("sentimentCal3.c |\n");
+    printf("----------------\n");
+
+
     if (argc < 5) {
         fprintf(stderr, "Usage: %s <positive_word> <negative_word> <num_files> <file1> [<file2> ... <fileN>]\n", argv[0]);
         exit(1);
@@ -125,6 +135,7 @@ int main(int argc, char *argv[]) {
     long nanoseconds = end_time.tv_nsec - start_time.tv_nsec;
     long total_microseconds = seconds * 1000000L + nanoseconds / 1000L;
     printf("Execution time: %ld µs\n", total_microseconds);
+    printf("---------------------------------------------------------------------\n");
 
     return 0;
 }

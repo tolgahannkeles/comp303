@@ -79,8 +79,7 @@ void process_file(const char *input_file, const char *positive_word, const char 
         line_number++;
     }
 
-    fprintf(out_file, "\t%s, score: %d\n", input_file, total_sentiment);
-
+    printf("Total sentiment score for %s: %d\n", input_file, total_sentiment);
 
     fclose(inp_file);
     fclose(out_file);
@@ -124,6 +123,9 @@ int main(int argc, char *argv[]) {
     // Measure the start time of the program
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_MONOTONIC, &start_time);
+    printf("---------------------------------------------------------------------\n");
+    printf("sentimentCal1.c |\n");
+    printf("----------------\n");
 
     if (argc < 5) {
         fprintf(stderr, "Usage: %s <positive_word> <negative_word> <num_files> <file1> <file2> ... <output_file>\n", argv[0]);
@@ -167,6 +169,7 @@ int main(int argc, char *argv[]) {
     long nanoseconds = end_time.tv_nsec - start_time.tv_nsec;
     long total_microseconds = seconds * 1000000L + nanoseconds / 1000L;
     printf("Execution time: %ld µs\n", total_microseconds);
+    printf("---------------------------------------------------------------------\n");
 
 
     return 0;

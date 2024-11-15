@@ -1,19 +1,19 @@
-CC = gcc  # Compiler (C derleyicisi)
+CC = gcc 
 
-# Her bir task için hedefler
 TASK1 = task1
 TASK2 = task2
 TASK3 = task3
 TASK4 = task4
 
-# Giriş ve çıkış dosyaları
 INPUTS = input1.txt input2.txt input3.txt input4.txt
 OUTPUT1 = output1.txt
 OUTPUT2 = output2.txt
 OUTPUT3 = output3.txt
 OUTPUT4 = output4.txt
 
-# Derleme hedefleri
+POSITIVE_WORD = Your
+NEGATIVE_WORD = have
+
 all: $(TASK1) $(TASK2) $(TASK3) $(TASK4) run_all 
 
 $(TASK1): task1.c
@@ -28,20 +28,18 @@ $(TASK3): task3.c
 $(TASK4): task4.c
 	$(CC) $(CFLAGS) task4.c -o $(TASK4)
 
-# Her bir task için çalıştırma kuralları
 run_task1: $(TASK1)
-	./$(TASK1) 4 input1.txt input2.txt input3.txt input4.txt $(OUTPUT1)
+	./$(TASK1) $(POSITIVE_WORD) $(NEGATIVE_WORD) 4 input1.txt input2.txt input3.txt input4.txt $(OUTPUT1)
 
 run_task2: $(TASK2)
-	./$(TASK2) 4 input1.txt input2.txt input3.txt input4.txt $(OUTPUT2)
+	./$(TASK2) $(POSITIVE_WORD) $(NEGATIVE_WORD) 4 input1.txt input2.txt input3.txt input4.txt $(OUTPUT2)
 
 run_task3: $(TASK3)
-	./$(TASK3) 4 input1.txt input2.txt input3.txt input4.txt $(OUTPUT3)
+	./$(TASK3) $(POSITIVE_WORD) $(NEGATIVE_WORD) 4 input1.txt input2.txt input3.txt input4.txt $(OUTPUT3)
 
 run_task4: $(TASK4)
-	./$(TASK4) 4 input1.txt input2.txt input3.txt input4.txt $(OUTPUT4)
+	./$(TASK4) $(POSITIVE_WORD) $(NEGATIVE_WORD) 4 input1.txt input2.txt input3.txt input4.txt $(OUTPUT4)
 
-# Tüm task'leri çalıştırma hedefi
 run_all: run_task1 run_task2 run_task3 run_task4
 
 clean:
