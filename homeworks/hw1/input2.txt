@@ -1,0 +1,38 @@
+The quick brown fox jumps over the lazy dog. A common pangram in English.
+This is a sentence that will be used as a test case for the sentiment analysis program.
+The weather today is wonderful, with clear skies and a slight breeze.
+Life is not measured by the number of breaths we take, but by the moments that take our breath away.
+The best time to plant a tree was 20 years ago. The second best time is now.
+Success is not final, failure is not fatal: It is the courage to continue that counts.
+Every great dream begins with a dreamer. Always remember, you have within you the strength, the patience, and the passion to reach for the stars to change the world.
+It always seems impossible until it's done. 
+Doubt kills more dreams than failure ever will.
+The only way to do great work is to love what you do.
+The future belongs to those who believe in the beauty of their dreams.
+Do what you can, with what you have, where you are.
+Life is 10% what happens to us and 90% how we react to it.
+In three words I can sum up everything I've learned about life: It goes on.
+Success usually comes to those who are too busy to be looking for it.
+Life is 10% what happens to you and 90% how you react to it.
+What we think, we become. Your task is not to seek for love, but merely to seek and find all the barriers within yourself that you have built against it.
+Happiness is not something ready-made. It comes from your own actions.
+We do not remember days; we remember moments.
+You only live once, but if you do it right, once is enough.
+It’s not whether you get knocked down, it’s whether you get up.
+The greatest glory in living lies not in never falling, but in rising every time we fall.
+Life is really simple, but we insist on making it complicated.
+It’s the possibility of having a dream come true that makes life interesting.
+The purpose of life is not to be happy. It is to be useful, to be honorable, to be compassionate, to have it make some difference that you have lived and lived well.
+Success consists of going from failure to failure without loss of enthusiasm.
+The only limit to our realization of tomorrow is our doubts of today.
+Our lives begin to end the day we become silent about things that matter.
+To be yourself in a world that is constantly trying to make you something else is the greatest accomplishment.
+Peace begins with a smile.
+Happiness depends upon ourselves.
+Happiness is not by chance, but by choice.
+You must be the change you wish to see in the world.
+When you arise in the morning think of what a privilege it is to be alive, to think, to enjoy, to love…
+The best revenge is massive success.
+Your time is limited, so don't waste it living someone else's life.
+Don't be trapped by dogma — which is living with the results of other people's thinking.
+The only way to do great work is to love what you do.
