@@ -60,7 +60,9 @@
     "stdio.h": "c",
     "semaphore.h": "c",
     "stdlib.h": "c",
-    "unistd.h": "c"
+    "unistd.h": "c",
+    "string.h": "c",
+    "wait.h": "c"
   },
   "makefile.makefilePath": ""
 }
