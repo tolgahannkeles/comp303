@@ -2,121 +2,167 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <fcntl.h>
+#include <sys/types.h>
 #include <sys/mman.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <semaphore.h>
-#include <time.h>
+#include <fcntl.h>
+#include <ctype.h>
+#include <sys/time.h>
 
-#define MAX_LINE_LENGTH 1024
-#define MAX_FILE_COUNT 10
-#define SHARED_MEM_SIZE 1024 * 1024 // 1 MB shared memory
+#define MAX_LINE 1024
 
-// Shared memory structure to hold results
-typedef struct {
-    char results[SHARED_MEM_SIZE];
-    int result_size;
-    sem_t semaphore;
-} SharedMemory;
-
-void search_in_file(const char* filename, const char* pos_word, const char* neg_word, SharedMemory* shm) {
-    FILE* file = fopen(filename, "r");
-    if (!file) {
-        perror("Error opening file");
-        exit(EXIT_FAILURE);
-    }
-
-    char line[MAX_LINE_LENGTH];
-    int line_number = 0;
-    int sentiment_score = 0;
-    char temp_result[SHARED_MEM_SIZE] = "";
-
-    while (fgets(line, sizeof(line), file)) {
-        line_number++;
-        if (strstr(line, pos_word) || strstr(line, neg_word)) {
-            // Calculate sentiment score
-            char *pos_ptr = line;
-            char *neg_ptr = line;
-            
-            while ((pos_ptr = strstr(pos_ptr, pos_word)) != NULL) {
-                sentiment_score += 5;
-                pos_ptr += strlen(pos_word);
-            }
-            
-            while ((neg_ptr = strstr(neg_ptr, neg_word)) != NULL) {
-                sentiment_score -= 3;
-                neg_ptr += strlen(neg_word);
-            }
-
-            // Format the matching line with filename and line number
-            snprintf(temp_result + strlen(temp_result), sizeof(temp_result) - strlen(temp_result),
-                     "%d, %s, %d: %s",sentiment_score, filename, line_number, line );
+// Helper function to remove punctuation from a word
+void sanitize_word(char *word) {
+    char *src = word, *dst = word;
+    while (*src) {
+        if (!ispunct((unsigned char)*src)) {
+            *dst++ = *src;
         }
+        src++;
     }
-
-    fclose(file);
-
-    // Critical section to update shared memory
-    sem_wait(&shm->semaphore);
-    strncat(shm->results, temp_result, sizeof(shm->results) - shm->result_size - 1);
-    shm->result_size += strlen(temp_result);
-    sem_post(&shm->semaphore);
+    *dst = '\0';
 }
 
-int main(int argc, char* argv[]) {
+// Function to calculate the total size of input files
+size_t calculate_total_file_size(int file_count, char *file_names[]) {
+    size_t total_size = 0;
+    struct stat st;
+
+    for (int i = 0; i < file_count; i++) {
+        if (stat(file_names[i], &st) == 0) {
+            total_size += st.st_size;
+        } else {
+            perror("Failed to get file size");
+            exit(1);
+        }
+    }
+    return total_size;
+}
+
+// Function to search in a file and write results to shared memory
+void search_in_file(const char *filename, const char *positive_word, const char *negative_word, char *shared_mem, sem_t *sem) {
+    FILE *input = fopen(filename, "r");
+    if (!input) {
+        perror("File opening failed");
+        exit(1);
+    }
+
+    char line[MAX_LINE];
+    int line_number = 0;
+
+    while (fgets(line, sizeof(line), input)) {
+        line_number++;
+        int score = 0;
+        char *line_copy = strdup(line); // Make a copy of the line for output
+        char *token = strtok(line, " \t\n");
+
+        int contains_positive = 0, contains_negative = 0;
+        while (token) {
+            sanitize_word(token); // Remove punctuation
+            if (strcmp(token, positive_word) == 0) {
+                score += 5;
+                contains_positive = 1;
+            }
+            if (strcmp(token, negative_word) == 0) {
+                score -= 3;
+                contains_negative = 1;
+            }
+            token = strtok(NULL, " \t\n");
+        }
+
+        if (contains_positive || contains_negative) {
+            sem_wait(sem);
+            sprintf(shared_mem + strlen(shared_mem), "%s, %d: %s", filename, line_number, line_copy);
+            sem_post(sem);
+        }
+
+        free(line_copy); // Free the duplicated line
+    }
+
+    fclose(input);
+}
+
+int main(int argc, char *argv[]) {
     if (argc < 5) {
-        fprintf(stderr, "Usage: %s <positive_word> <negative_word> <num_files> <input_files...> <output_file>\n", argv[0]);
-        return EXIT_FAILURE;
+        fprintf(stderr, "Usage: %s positive_word negative_word n input1.txt ... inputN.txt output.txt\n", argv[0]);
+        exit(1);
     }
 
-    const char* pos_word = argv[1];
-    const char* neg_word = argv[2];
-    int num_files = atoi(argv[3]);
-    char* output_file = argv[4 + num_files];
+    const char *positive_word = argv[1];
+    const char *negative_word = argv[2];
+    int n = atoi(argv[3]);
 
-    // Set up shared memory
-    SharedMemory* shm = mmap(NULL, sizeof(SharedMemory), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-    if (shm == MAP_FAILED) {
+    if (n < 1 || argc != n + 5) {
+        fprintf(stderr, "Invalid number of input files.\n");
+        exit(1);
+    }
+
+    const char *output_file = argv[n + 4];
+
+    // Calculate the required shared memory size
+    size_t shared_mem_size = calculate_total_file_size(n, &argv[4]);
+
+    // Create shared memory dynamically
+    char *shared_mem = mmap(NULL, shared_mem_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    if (shared_mem == MAP_FAILED) {
         perror("mmap failed");
-        return EXIT_FAILURE;
+        exit(1);
     }
-    shm->result_size = 0;
-    sem_init(&shm->semaphore, 1, 1); // Initialize unnamed semaphore
+    memset(shared_mem, 0, shared_mem_size);
 
-    // Start measuring execution time
-    clock_t start_time = clock();
+    // Create unnamed semaphore
+    sem_t *sem = mmap(NULL, sizeof(sem_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    if (sem == MAP_FAILED) {
+        perror("mmap for semaphore failed");
+        exit(1);
+    }
+    sem_init(sem, 1, 1);
 
-    pid_t pids[MAX_FILE_COUNT];
-    for (int i = 0; i < num_files; i++) {
-        if ((pids[i] = fork()) == 0) {
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
+
+    pid_t pids[n];
+    for (int i = 0; i < n; i++) {
+        const char *input_file = argv[4 + i];
+
+        pid_t pid = fork();
+        if (pid == 0) {
             // Child process
-            search_in_file(argv[4 + i], pos_word, neg_word, shm);
+            search_in_file(input_file, positive_word, negative_word, shared_mem, sem);
             exit(0);
+        } else if (pid > 0) {
+            // Parent process
+            pids[i] = pid;
+        } else {
+            perror("fork failed");
+            exit(1);
         }
     }
 
-    // Wait for all children to finish
-    for (int i = 0; i < num_files; i++) {
+    // Parent process waits for all children to finish
+    for (int i = 0; i < n; i++) {
         waitpid(pids[i], NULL, 0);
     }
 
-    // Write results to output file
-    FILE* out_file = fopen(output_file, "w");
-    if (!out_file) {
-        perror("Error opening output file");
-        return EXIT_FAILURE;
+    // Write final output to file
+    FILE *output = fopen(output_file, "w");
+    if (!output) {
+        perror("Output file opening failed");
+        exit(1);
     }
-    fprintf(out_file, "%s", shm->results);
-    fclose(out_file);
-
-    // End measuring execution time
-    clock_t end_time = clock();
-    double execution_time = (double)(end_time - start_time) / CLOCKS_PER_SEC;
-    printf("Execution Time: %.2f seconds\n", execution_time);
+    fprintf(output, "%s", shared_mem);
+    fclose(output);
 
     // Cleanup
-    sem_destroy(&shm->semaphore);
-    munmap(shm, sizeof(SharedMemory));
+    sem_destroy(sem);
+    munmap(sem, sizeof(sem_t));
+    munmap(shared_mem, shared_mem_size);
 
-    return EXIT_SUCCESS;
+    gettimeofday(&end, NULL);
+    long elapsed = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec);
+    printf("Execution time: %ld microseconds\n", elapsed);
+
+    return 0;
 }
