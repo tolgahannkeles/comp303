@@ -12,8 +12,9 @@
 #define PIPE_BUFFER_SIZE 4096
 #define MAX_LINES 99999
 
-// Structure to store filename, line number, and the actual line
-typedef struct {
+// Structure to store filename, line number, and the actual line in the Pipeline
+typedef struct
+{
     char filename[MAX_LINE_LENGTH];
     int line_number;
     char line[MAX_LINE_LENGTH];
@@ -52,6 +53,7 @@ int count_word_in_line(const char *line, const char *word)
 
 void process_file(const char *filename, const char *positive_word, const char *negative_word, int pipe_fd)
 {
+    // Open input file
     FILE *file = fopen(filename, "r");
     if (!file)
     {
@@ -66,17 +68,19 @@ void process_file(const char *filename, const char *positive_word, const char *n
     int total_sentiment = 0;
 
     PipeData data;
-
+    // Read the file line by line
     while (fgets(line, MAX_LINE_LENGTH, file))
     {
         line_number++;
 
+        // Calculate sentiment score for the line
         int num_positive = count_word_in_line(line, positive_word);
         int num_negative = count_word_in_line(line, negative_word);
         int sentiment_score = num_positive * 5 - num_negative * 3;
 
         if (sentiment_score != 0)
         {
+            // Fill the struct data with the filename, line number, and the actual line
             snprintf(data.filename, MAX_LINE_LENGTH, "%s", filename);
             data.line_number = line_number;
             snprintf(data.line, MAX_LINE_LENGTH, "%s", line);
@@ -84,6 +88,7 @@ void process_file(const char *filename, const char *positive_word, const char *n
             // Write the struct data to the pipe
             if (write(pipe_fd, &data, sizeof(PipeData)) == -1)
             {
+                // If write fails, print an error message and exit
                 perror("write");
                 exit(1);
             }
@@ -96,7 +101,6 @@ void process_file(const char *filename, const char *positive_word, const char *n
 
     fclose(file);
 }
-
 
 // Comparison function for sorting PipeData
 int compare_file_lines(const void *a, const void *b)
@@ -146,23 +150,23 @@ int main(int argc, char *argv[])
     pid_t pids[MAX_FILES];
     for (int i = 0; i < num_files; i++)
     {
-        // Child process
         if ((pids[i] = fork()) == 0)
         {
+            // Child process: close the read end of the pipe and process the file
             close(pipe_fd[0]); // Close the read end of the pipe
             process_file(argv[i + 4], positive_word, negative_word, pipe_fd[1]);
             close(pipe_fd[1]); // Close the write end of the pipe
             exit(0);
         }
-    }   
+    }
 
-   // Parent process: close the write end of the pipe and read data
+    // Parent process: close the write end of the pipe and read data
     close(pipe_fd[1]);
 
     // Dynamically allocate memory for storing PipeData
     PipeData *all_data = NULL;
     int data_count = 0;
-    int buffer_size = 10;  // Start with an initial buffer size
+    int buffer_size = 10;
 
     // Allocate initial memory for the data array
     all_data = malloc(buffer_size * sizeof(PipeData));
@@ -178,8 +182,12 @@ int main(int argc, char *argv[])
         PipeData data;
         ssize_t bytes_read = read(pipe_fd[0], &data, sizeof(PipeData));
 
-        if (bytes_read == 0)  // No more data to read
+        // Break the loop if no more data to read
+        if (bytes_read == 0)
+        {
             break;
+        }
+        // Check for read error
         if (bytes_read == -1)
         {
             perror("read");
@@ -189,15 +197,17 @@ int main(int argc, char *argv[])
         // Resize the array if we run out of space
         if (data_count >= buffer_size)
         {
-            buffer_size *= 2;  // Double the buffer size
+            // Double the buffer size when we run out of space
+            buffer_size *= 2; 
+            // Reallocate memory for the array
             all_data = realloc(all_data, buffer_size * sizeof(PipeData));
             if (!all_data)
             {
+                // If realloc fails, print an error message and exit
                 perror("realloc");
                 exit(1);
             }
         }
-
         // Add the data to the array
         all_data[data_count++] = data;
     }
@@ -205,7 +215,7 @@ int main(int argc, char *argv[])
     // Close the read end of the pipe
     close(pipe_fd[0]);
 
-    // Sort the collected data
+    // Sort the collected data with qsort via compare_file_lines function
     qsort(all_data, data_count, sizeof(PipeData), compare_file_lines);
 
     // Write sorted data to the output file
@@ -216,6 +226,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+    // Write the sorted data to the output file line by line
     for (int i = 0; i < data_count; i++)
     {
         fprintf(outfile, "%s,%d:%s", all_data[i].filename, all_data[i].line_number, all_data[i].line);

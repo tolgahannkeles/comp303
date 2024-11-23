@@ -67,7 +67,7 @@ void process_file(const char *input_file, const char *positive_word, const char 
     }
 
     char line[MAX_LINE_LENGTH];
-    int line_number = 0;
+    int line_number = 1;
     int total_sentiment = 0;
     while (fgets(line, sizeof(line), inp_file))
     {
@@ -190,5 +190,6 @@ int main(int argc, char *argv[])
     long total_microseconds = seconds * 1000000L + nanoseconds / 1000L;
     printf("Execution time: %ld µs\n", total_microseconds);
     printf("---------------------------------------------------------------------\n");
+    
     return 0;
 }
