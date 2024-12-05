@@ -1,254 +1,151 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include <sys/types.h>
 #include <sys/wait.h>
+#include <unistd.h>
 #include <ctype.h>
 #include <time.h>
 
-// Defining constraints
-#define MAX_LINE_LENGTH 1024
 #define MAX_FILES 10
-#define PIPE_BUFFER_SIZE 4096
-#define MAX_LINES 99999
 
-// Structure to store filename, line number, and the actual line in the Pipeline
-typedef struct
-{
-    char filename[MAX_LINE_LENGTH];
-    int line_number;
-    char line[MAX_LINE_LENGTH];
-} PipeData;
-
-// Function to check if a character is a word boundary by checking if the character is an alphabet or not
-int is_word_boundary(char c)
-{
-    return !isalnum(c);
-}
-
-// Function to count the number of occurrences of a word in a line
-int count_word_in_line(const char *line, const char *word)
-{
-    int count = 0;
-    const char *current_position = line;
-    size_t word_length = strlen(word);
-
-    while ((current_position = strstr(current_position, word)) != NULL)
-    {
-        // Check if the found word is a separate word
-        int is_start_of_word = (current_position == line || is_word_boundary(*(current_position - 1)));
-        int is_end_of_word = is_word_boundary(*(current_position + word_length));
-
-        if (is_start_of_word && is_end_of_word)
-        {
-            count++;
+int is_standalone_word(const char *str, const char *word) {
+    const char *pos = strstr(str, word);
+    while (pos != NULL) {
+        if ((pos == str || !isalnum((unsigned char)pos[-1])) &&
+            !isalnum((unsigned char)pos[strlen(word)])) {
+            return 1;
         }
-
-        // Move past the current match to continue searching
-        current_position += word_length;
+        pos = strstr(pos + 1, word);
     }
-
-    return count;
+    return 0;
 }
 
-void process_file(const char *filename, const char *positive_word, const char *negative_word, int pipe_fd)
-{
-    // Open input file
-    FILE *file = fopen(filename, "r");
-    if (!file)
-    {
-        perror("Error opening file");
+void process_input_file(char *input_file, char *positive_word, char *negative_word, int pipe_fd) {
+    FILE *file = fopen(input_file, "r");
+    if (file == NULL) {
+        printf("Error: File not found\n");
         exit(1);
     }
-
-    char line[MAX_LINE_LENGTH];
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t read;
     int line_number = 0;
-    char buffer[PIPE_BUFFER_SIZE];
+    int sentiment_score = 0;
+    char *buffer = NULL;
+    size_t buffer_size = 0;
 
-    int total_sentiment = 0;
-
-    PipeData data;
-    // Read the file line by line
-    while (fgets(line, MAX_LINE_LENGTH, file))
-    {
+    while ((read = getline(&line, &len, file)) != -1) {
         line_number++;
-
-        // Calculate sentiment score for the line
-        int num_positive = count_word_in_line(line, positive_word);
-        int num_negative = count_word_in_line(line, negative_word);
-        int sentiment_score = num_positive * 5 - num_negative * 3;
-
-        if (sentiment_score != 0)
-        {
-            // Fill the struct data with the filename, line number, and the actual line
-            snprintf(data.filename, MAX_LINE_LENGTH, "%s", filename);
-            data.line_number = line_number;
-            snprintf(data.line, MAX_LINE_LENGTH, "%s", line);
-
-            // Write the struct data to the pipe
-            if (write(pipe_fd, &data, sizeof(PipeData)) == -1)
-            {
-                // If write fails, print an error message and exit
-                perror("write");
+        char *original_line = strdup(line);
+        if (is_standalone_word(line, positive_word)) {
+            sentiment_score += 5;
+        }
+        if (is_standalone_word(line, negative_word)) {
+            sentiment_score -= 3;
+        }
+        if (sentiment_score != 0) {
+            size_t needed_size = snprintf(NULL, 0, "%s, %d: %sSentiment Score: %d\n", input_file, line_number, original_line, sentiment_score) + 1;
+            buffer = realloc(buffer, buffer_size + needed_size);
+            if (buffer == NULL) {
+                printf("Error: realloc failed\n");
+                free(original_line);
+                free(line);
+                fclose(file);
                 exit(1);
             }
-
-            total_sentiment += sentiment_score;
+            snprintf(buffer + buffer_size, needed_size, "%s, %d: %sSentiment Score: %d\n", input_file, line_number, original_line, sentiment_score);
+            buffer_size += needed_size - 1;
         }
+        free(original_line);
+        sentiment_score = 0; // Reset sentiment score for the next line
     }
-
-    printf("Total sentiment score for %s: %d\n", filename, total_sentiment);
-
+    free(line);
+    write(pipe_fd, buffer, buffer_size);
+    free(buffer);
     fclose(file);
+    close(pipe_fd); // Close the write end of the pipe
 }
 
-// Comparison function for sorting PipeData
-int compare_file_lines(const void *a, const void *b)
-{
-    PipeData *line_a = (PipeData *)a;
-    PipeData *line_b = (PipeData *)b;
-
-    // First, compare by filename
-    int filename_comparison = strcmp(line_a->filename, line_b->filename);
-    if (filename_comparison != 0)
-        return filename_comparison;
-
-    // If filenames are the same, compare by line number
-    return line_a->line_number - line_b->line_number;
-}
-
-int main(int argc, char *argv[])
-{
-    if (argc < 5)
-    {
-        fprintf(stderr, "Usage: %s <positive_word> <negative_word> <num_files> <file1> [<file2> ... <fileN>] <output_file>\n", argv[0]);
+void collect_results(int num_files, char *final_output_file, int pipes[][2]) {
+    FILE *final_output = fopen(final_output_file, "w");
+    if (final_output == NULL) {
+        printf("Error: Could not open final output file\n");
         exit(1);
     }
 
-    struct timespec start_time, end_time;
-    clock_gettime(CLOCK_MONOTONIC, &start_time);
+    for (int i = 0; i < num_files; i++) {
+        close(pipes[i][1]); // Close the write end of the pipe in the parent process
+        char *buffer = NULL;
+        size_t buffer_size = 0;
+        ssize_t bytes_read;
+        while (1) {
+            buffer = realloc(buffer, buffer_size + 1024);
+            if (buffer == NULL) {
+                printf("Error: realloc failed\n");
+                fclose(final_output);
+                exit(1);
+            }
+            bytes_read = read(pipes[i][0], buffer + buffer_size, 1024);
+            if (bytes_read <= 0) {
+                break;
+            }
+            buffer_size += bytes_read;
+        }
+        if (fwrite(buffer, 1, buffer_size, final_output) != buffer_size) {
+            printf("Error: fwrite failed\n");
+            free(buffer);
+            fclose(final_output);
+            exit(1);
+        }
+        free(buffer);
+        close(pipes[i][0]); // Close the read end of the pipe
+    }
 
-    printf("---------------------------------------------------------------------\n");
-    printf("sentimentCal3.c |\n");
-    printf("----------------\n");
+    fclose(final_output);
+}
 
-    // Get the input arguments
-    const char *positive_word = argv[1];
-    const char *negative_word = argv[2];
+int main(int argc, char *argv[]) {
+    if (argc < 6) {
+        printf("Usage: %s <positive_word> <negative_word> <num_files> <input_file1> [<input_file2> ...] <output_file>\n", argv[0]);
+        return 1;
+    }
+
+    clock_t start_time = clock();
+
+    char *positive_word = argv[1];
+    char *negative_word = argv[2];
     int num_files = atoi(argv[3]);
-    const char *output_file = argv[argc - 1];
+    char *final_output_file = argv[argc - 1];
 
-    // Create a pipe to communicate between parent and child processes 0: read end, 1: write end
-    int pipe_fd[2];
-    if (pipe(pipe_fd) == -1)
-    {
-        perror("pipe");
-        exit(1);
-    }
+    int pipes[MAX_FILES][2];
 
-    // Create child processes to process each file
-    pid_t pids[MAX_FILES];
-    for (int i = 0; i < num_files; i++)
-    {
-        if ((pids[i] = fork()) == 0)
-        {
-            // Child process: close the read end of the pipe and process the file
-            close(pipe_fd[0]); // Close the read end of the pipe
-            process_file(argv[i + 4], positive_word, negative_word, pipe_fd[1]);
-            close(pipe_fd[1]); // Close the write end of the pipe
+    for (int i = 0; i < num_files; i++) {
+        if (pipe(pipes[i]) < 0) {
+            printf("Error: Pipe creation failed\n");
+            exit(1);
+        }
+
+        pid_t pid = fork();
+        if (pid < 0) {
+            printf("Error: Fork failed\n");
+            exit(1);
+        } else if (pid == 0) {
+            close(pipes[i][0]); // Close the read end of the pipe in the child process
+            process_input_file(argv[4 + i], positive_word, negative_word, pipes[i][1]);
             exit(0);
         }
     }
 
-    // Parent process: close the write end of the pipe and read data
-    close(pipe_fd[1]);
-
-    // Dynamically allocate memory for storing PipeData
-    PipeData *all_data = NULL;
-    int data_count = 0;
-    int buffer_size = 10;
-
-    // Allocate initial memory for the data array
-    all_data = malloc(buffer_size * sizeof(PipeData));
-    if (!all_data)
-    {
-        perror("malloc");
-        exit(1);
+    for (int i = 0; i < num_files; i++) {
+        wait(NULL); // Wait for all child processes to finish
     }
 
-    // Read the data from the pipe into the array
-    while (1)
-    {
-        PipeData data;
-        ssize_t bytes_read = read(pipe_fd[0], &data, sizeof(PipeData));
+    collect_results(num_files, final_output_file, pipes);
 
-        // Break the loop if no more data to read
-        if (bytes_read == 0)
-        {
-            break;
-        }
-        // Check for read error
-        if (bytes_read == -1)
-        {
-            perror("read");
-            exit(1);
-        }
-
-        // Resize the array if we run out of space
-        if (data_count >= buffer_size)
-        {
-            // Double the buffer size when we run out of space
-            buffer_size *= 2; 
-            // Reallocate memory for the array
-            all_data = realloc(all_data, buffer_size * sizeof(PipeData));
-            if (!all_data)
-            {
-                // If realloc fails, print an error message and exit
-                perror("realloc");
-                exit(1);
-            }
-        }
-        // Add the data to the array
-        all_data[data_count++] = data;
-    }
-
-    // Close the read end of the pipe
-    close(pipe_fd[0]);
-
-    // Sort the collected data with qsort via compare_file_lines function
-    qsort(all_data, data_count, sizeof(PipeData), compare_file_lines);
-
-    // Write sorted data to the output file
-    FILE *outfile = fopen(output_file, "w");
-    if (outfile == NULL)
-    {
-        perror("fopen");
-        exit(1);
-    }
-
-    // Write the sorted data to the output file line by line
-    for (int i = 0; i < data_count; i++)
-    {
-        fprintf(outfile, "%s,%d:%s", all_data[i].filename, all_data[i].line_number, all_data[i].line);
-    }
-
-    fclose(outfile);
-
-    // Free dynamically allocated memory
-    free(all_data);
-
-    // Wait for all child processes to finish
-    for (int i = 0; i < num_files; i++)
-    {
-        waitpid(pids[i], NULL, 0);
-    }
-
-    clock_gettime(CLOCK_MONOTONIC, &end_time);
-    long seconds = end_time.tv_sec - start_time.tv_sec;
-    long nanoseconds = end_time.tv_nsec - start_time.tv_nsec;
-    long total_microseconds = seconds * 1000000L + nanoseconds / 1000L;
-    printf("Execution time: %ld µs\n", total_microseconds);
-    printf("---------------------------------------------------------------------\n");
+    clock_t end_time = clock();
+    double execution_time = ((double) (end_time - start_time)) / CLOCKS_PER_SEC;
+    printf("Execution time: %.10f seconds\n", execution_time);
 
     return 0;
 }
