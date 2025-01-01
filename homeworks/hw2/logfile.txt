@@ -1,0 +1,9 @@
+Reader 1 started reading tbl1.txt
+Reader 2 started reading tbl1.txt
+Writer 3 waiting to write to tbl1.txt
+Reader 2 finished reading tbl1.txt
+Reader 1 finished reading tbl1.txt
+Writer 3 started writing to tbl1.txt
+Writer 3 finished writing to tbl1.txt
+Reader 4 started reading tbl1.txt
+Reader 4 finished reading tbl1.txt
