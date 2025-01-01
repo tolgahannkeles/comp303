@@ -100,6 +100,40 @@ Example:
 
 ---
 
+## Sample Run
+
+### Activity File
+
+```
+5 1 1 read 3 “ ”
+6 2 1 read 2 “ “
+7 3 1 write 10 “ INFORMATION 1 “
+9 4 1 read 2 “ “
+```
+### Log File
+
+```
+Reader 1 started reading tbl1.txt
+Reader 2 started reading tbl1.txt
+Writer 3 waiting to write to tbl1.txt
+Reader 2 finished reading tbl1.txt
+Reader 1 finished reading tbl1.txt
+Writer 3 started writing to tbl1.txt
+Writer 3 finished writing to tbl1.txt
+Reader 4 started reading tbl1.txt
+Reader 4 finished reading tbl1.txt
+
+```
+
+### tbl1.txt File
+```
+“ INFORMATION 1 “
+
+```
+### tb2.txt File
+```
+```
+
 ## Author
 Tolgahan Keleş
 2311051801
