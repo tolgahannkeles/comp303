@@ -110,6 +110,16 @@ Example:
 7 3 1 write 10 “ INFORMATION 1 “
 9 4 1 read 2 “ “
 ```
+
+### Commands
+
+```bash
+gcc databaseSim.c -o databaseSim
+```
+```bash
+./databaseSim 10 2 activity.txt
+```
+
 ### Log File
 
 ```
